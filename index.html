@@ -74,6 +74,22 @@ fieldset{border:0;padding:0;margin:0;min-width:0}
 .opt{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:6px;cursor:pointer;min-width:0}
 .opt:hover{border-color:var(--accent)}
 .opt:has(input:checked){border-color:var(--accent);background:var(--accent-tint)}
+.opt.ok,.opt.ok:has(input:checked){border-color:var(--good);background:var(--good-tint)}
+.opt.no,.opt.no:has(input:checked){border-color:var(--bad);background:var(--bad-tint)}
+.opt.lock{cursor:default}
+.opt .tag{margin-left:auto;font-size:13px;font-weight:600;white-space:nowrap;padding-left:8px}
+.opt.ok .tag{color:var(--good)}.opt.no .tag{color:var(--bad)}
+.fb{margin-top:14px;padding:12px 14px;border-radius:6px;border:1px solid var(--line);font-size:15px}
+.fb.ok{border-color:var(--good);background:var(--good-tint)}
+.fb.no{border-color:var(--bad);background:var(--bad-tint)}
+.fb b{display:block;margin-bottom:2px}
+.fb .src{margin-top:4px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.mode{display:block;padding:12px 14px;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.mode:has(input:checked){border-color:var(--accent);background:var(--accent-tint)}
+.mode input{margin-right:8px;accent-color:var(--accent)}
+.mode b{font-weight:600}.mode small{display:block;color:var(--muted);margin-top:2px;margin-left:26px}
+@media(max-width:520px){.modes{grid-template-columns:1fr}}
 .opt input{margin-top:5px;width:18px;height:18px;accent-color:var(--accent);flex:none}
 .opt .l{font-weight:600;min-width:1.2em}
 .opt span.tx{min-width:0;overflow-wrap:anywhere}
@@ -121,6 +137,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--m
 .keyset .btn{padding:3px 12px}
 .src{font-size:13px;color:var(--muted);margin-top:8px}
 @media(prefers-reduced-motion:no-preference){.opt,.chk,.pb,.btn{transition:border-color .12s,background-color .12s}}
+.pb.ok{background:var(--good-tint);border-color:var(--good);color:var(--good)}
+.pb.no{background:var(--bad-tint);border-color:var(--bad);color:var(--bad)}
 </style>
 
 <div id="bar" class="bar" hidden></div>
@@ -144,7 +162,7 @@ const keyOf=q=>q.a||userKeys[q.id]||null;
 const PAST=['GES 106 FIRST TEST','GES 106 GENERAL TEST','GES 106 TYPE B','GES 106 PAPER','GST 212 NEXUS MINDS','PHILOSOPHY BATCH B','GST 212 CA TEST','GST 212 GENERAL TEST (TYPE C)'];
 const ALLSETS=[...new Set(DATA.map(q=>q.set))];
 const BANK=ALLSETS.filter(s=>!PAST.includes(s));
-const S={view:'setup',sel:new Set(PAST),opts:{count:60,minutes:45,timed:true,shuffle:true,unkeyed:true,minEdited:false},exam:null,result:null,filter:'all'};
+const S={view:'setup',sel:new Set(PAST),opts:{mode:'exam',count:60,minutes:45,timed:true,shuffle:true,unkeyed:true,minEdited:false},exam:null,result:null,filter:'all'};
 let timer=null;
 const fmt=t=>{t=Math.max(0,t);const hh=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;
   return (hh?hh+':':'')+String(m).padStart(2,hh?'0':'0')+':'+String(s).padStart(2,'0')};
@@ -191,6 +209,9 @@ function renderSetup(){
           h('button',{class:'btn',onclick:()=>{S.sel.clear();ALLSETS.forEach(s=>boxes[s].checked=false);poolChanged()}},'Clear'))),
       h('section',{class:'panel'},
         h('h2',{text:'Test settings'}),
+        h('div',{class:'modes',role:'radiogroup','aria-label':'Mode'},
+          [['exam','Exam mode','Answers stay hidden until you submit. Timed by default.'],['practice','Practice mode','See the correct answer as soon as you pick an option. Untimed by default.']].map(([v,t,d])=>
+            h('label',{class:'mode'},h('input',{type:'radio',name:'mode',value:v,checked:S.opts.mode===v,onchange:()=>{S.opts.mode=v;S.opts.timed=v==='exam';tm.checked=S.opts.timed;minutes.disabled=!S.opts.timed}}),h('b',{},t),h('small',{},d)))),
         h('div',{class:'row'},
           h('div',{class:'field'},h('label',{for:'count'},'Questions'),count),
           h('div',{class:'field'},h('label',{for:'minutes'},'Minutes'),minutes)),
@@ -203,7 +224,7 @@ function renderSetup(){
 
 /* ---------- exam ---------- */
 function startExam(qs,minutes,timed){
-  S.exam={qs,ans:{},flags:new Set(),idx:0,timed,minutes,start:Date.now(),end:Date.now()+minutes*60000,confirm:false};
+  S.exam={mode:S.opts.mode,qs,ans:{},flags:new Set(),idx:0,timed,minutes,start:Date.now(),end:Date.now()+minutes*60000,confirm:false};
   S.view='exam';renderExam();
   clearInterval(timer);timer=setInterval(tick,500);tick();window.scrollTo(0,0);}
 function tick(){const E=S.exam;if(!E)return;const el=$('#clock');if(!el)return;
@@ -211,9 +232,9 @@ function tick(){const E=S.exam;if(!E)return;const el=$('#clock');if(!el)return;
   else el.textContent=fmt(Math.floor((Date.now()-E.start)/1000));}
 function renderExam(){
   const E=S.exam;
-  setBar([h('div',{class:'title'},'Philosophy CBT',h('small',{},E.timed?'Time remaining':'Time elapsed')),
+  setBar([h('div',{class:'title'},'Philosophy CBT · '+(E.mode==='practice'?'Practice mode':'Exam mode'),h('small',{},E.timed?'Time remaining':'Time elapsed')),
     h('div',{class:'clock',id:'clock','aria-live':'off'},'--:--'),
-    h('button',{class:'btn primary',onclick:()=>{E.confirm=true;renderConfirm()}},'Submit test')]);
+    h('button',{class:'btn primary',onclick:()=>{E.confirm=true;renderConfirm()}},E.mode==='practice'?'Finish practice':'Submit test')]);
   const root=$('#app');root.replaceChildren(
     h('div',{class:'exam'},h('section',{class:'panel',id:'qpanel'}),
       h('aside',{class:'side panel'},h('h2',{text:'Question palette'}),h('div',{class:'pal',id:'pal'}),
@@ -223,34 +244,42 @@ function renderExam(){
 function go(i){const E=S.exam;E.idx=Math.min(E.qs.length-1,Math.max(0,i));showQ();window.scrollTo({top:0})}
 function showQ(){
   const E=S.exam,q=E.qs[E.idx],id=q.id;
+  const key=keyOf(q),picked=E.ans[id],lock=E.mode==='practice'&&!!key&&!!picked;
+  let fb=null;
+  if(E.mode==='practice'&&picked){
+    if(!key)fb=h('div',{class:'fb'},h('b',{},'No answer key'),h('div',{},'There is no key for this question, so it is not scored.'));
+    else fb=h('div',{class:'fb '+(picked===key?'ok':'no')},h('b',{},picked===key?'Correct':'Incorrect. The correct answer is '+key+'.'),h('div',{class:'src'},q.a?q.s:'Key saved by you.'))}
   const p=$('#qpanel');p.replaceChildren(
     h('div',{class:'qhead'},h('div',{class:'qno'},`Question ${E.idx+1} of ${E.qs.length}`),h('div',{class:'ref'},'Reference: '+q.ref)),
     h('div',{class:'qtext'},q.q),
     h('fieldset',{},h('legend',{class:'muted small',style:'margin-bottom:8px'},'Choose one answer'),
       h('div',{class:'opts'},q.o.map((t,i)=>{const L='ABCDE'[i];
-        return h('label',{class:'opt'},h('input',{type:'radio',name:'opt',value:L,checked:E.ans[id]===L,onchange:()=>{E.ans[id]=L;pal()}}),h('span',{class:'l'},L+'.'),h('span',{class:'tx'},t))}))),
+        let c='opt',tag=null;
+        if(lock){c+=' lock';if(L===key){c+=' ok';tag='Correct answer'}else if(L===E.ans[id]){c+=' no';tag='Your answer'}}
+        return h('label',{class:c},h('input',{type:'radio',name:'opt',value:L,checked:E.ans[id]===L,disabled:lock,onchange:()=>{E.ans[id]=L;if(E.mode==='practice')showQ();else pal()}}),h('span',{class:'l'},L+'.'),h('span',{class:'tx'},t),tag?h('span',{class:'tag'},tag):null)}))),
+    fb,
     h('div',{class:'nav'},
       h('button',{class:'btn',disabled:E.idx===0,onclick:()=>go(E.idx-1)},'Previous'),
       h('button',{class:'btn primary',disabled:E.idx===E.qs.length-1,onclick:()=>go(E.idx+1)},'Next'),
       h('label',{class:'flagbox sp'},h('input',{type:'checkbox',checked:E.flags.has(id),onchange:e=>{e.target.checked?E.flags.add(id):E.flags.delete(id);pal()}}),'Flag for review'),
-      h('button',{class:'btn',disabled:!E.ans[id],onclick:()=>{delete E.ans[id];showQ();pal()}},'Clear answer')));
+      h('button',{class:'btn',disabled:!E.ans[id]||lock,onclick:()=>{delete E.ans[id];showQ();pal()}},'Clear answer')));
   pal();}
 function pal(){const E=S.exam,box=$('#pal');if(!box)return;
-  box.replaceChildren(...E.qs.map((q,i)=>h('button',{class:'pb'+(E.ans[q.id]?' ans':'')+(E.flags.has(q.id)?' fl':'')+(i===E.idx?' cur':''),'aria-label':`Question ${i+1}${E.ans[q.id]?', answered':''}${E.flags.has(q.id)?', flagged':''}`,'aria-current':i===E.idx?'true':null,onclick:()=>go(i)},String(i+1))));
+  box.replaceChildren(...E.qs.map((q,i)=>h('button',{class:'pb'+(E.ans[q.id]?' ans':'')+(E.mode==='practice'&&E.ans[q.id]&&keyOf(q)?(E.ans[q.id]===keyOf(q)?' ok':' no'):'')+(E.flags.has(q.id)?' fl':'')+(i===E.idx?' cur':''),'aria-label':`Question ${i+1}${E.ans[q.id]?', answered':''}${E.flags.has(q.id)?', flagged':''}`,'aria-current':i===E.idx?'true':null,onclick:()=>go(i)},String(i+1))));
   const c=box.querySelector('.cur');if(c&&c.scrollIntoView)c.scrollIntoView({block:'nearest'});}
 function renderConfirm(){
   const E=S.exam;document.querySelector('.overlay')?.remove();if(!E.confirm)return;
   const un=E.qs.filter(q=>!E.ans[q.id]).length,fl=E.flags.size;
   const close=()=>{E.confirm=false;document.querySelector('.overlay')?.remove()};
   document.body.append(h('div',{class:'overlay',role:'dialog','aria-modal':'true','aria-label':'Submit test'},
-    h('div',{class:'dialog'},h('h1',{style:'font-size:21px',text:'Submit your test?'}),
+    h('div',{class:'dialog'},h('h1',{style:'font-size:21px',text:E.mode==='practice'?'Finish practice?':'Submit your test?'}),
       h('p',{class:'muted'},`${E.qs.length-un} of ${E.qs.length} answered · ${un} unanswered · ${fl} flagged for review.`),
-      h('p',{class:'small muted'},'You cannot change answers after submitting.'),
+      h('p',{class:'small muted'},E.mode==='practice'?'You will see your score and a full review.':'You cannot change answers after submitting.'),
       h('div',{class:'row'},h('button',{class:'btn',onclick:close},'Keep working'),h('button',{class:'btn primary',onclick:()=>{close();submit(false)}},'Submit now')))));}
 document.addEventListener('keydown',e=>{
   if(S.view!=='exam'||e.ctrlKey||e.metaKey||e.altKey||document.querySelector('.overlay'))return;
   const k=e.key.toLowerCase(),E=S.exam,q=E.qs[E.idx];
-  if('abcde'.includes(k)&&k.length===1&&q.o[k.charCodeAt(0)-97]!==undefined){E.ans[q.id]=k.toUpperCase();showQ()}
+  if('abcde'.includes(k)&&k.length===1&&q.o[k.charCodeAt(0)-97]!==undefined){if(E.mode==='practice'&&keyOf(q)&&E.ans[q.id])return;E.ans[q.id]=k.toUpperCase();showQ()}
   else if(k==='n')go(E.idx+1);else if(k==='p')go(E.idx-1);
   else if(k==='f'){E.flags.has(q.id)?E.flags.delete(q.id):E.flags.add(q.id);showQ()}});
 
